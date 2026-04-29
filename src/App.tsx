@@ -62,12 +62,19 @@ interface CartItem {
   quantity: number;
 }
 
+interface OrderItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+}
+
 interface Order {
   id: string;
   customerName: string;
   customerPhone: string;
-  customerAddress: string;
-  items: CartItem[];
+  address: string;
+  items: OrderItem[];
   total: number;
   status: 'pending' | 'shipped' | 'delivered';
   createdAt: Timestamp | null;
@@ -1494,7 +1501,7 @@ export default function App() {
           quantity: item.quantity,
           price: item.product.price
         })),
-        totalAmount: orderTotal,
+        total: orderTotal,
         status: 'pending',
         createdAt: serverTimestamp()
       });

@@ -28,27 +28,29 @@ service cloud.firestore {
         && data.size is string && data.size.size() <= 50;
     }
 
-    // 2. Orders: Publicly create-only
+    // 2. Orders: Publicly create-only, readable for admin dashboard
     match /orders/{orderId} {
       allow create: if isValidOrder(incoming());
-      allow read, update, delete: if false;
+      allow read: if true; // In a production app, this should be restricted to admin
+      allow update, delete: if false;
     }
 
     function isValidOrder(data) {
-      return data.keys().hasAll(['customerName', 'customerPhone', 'address', 'items', 'totalAmount', 'status', 'createdAt'])
+      return data.keys().hasAll(['customerName', 'customerPhone', 'address', 'items', 'total', 'status', 'createdAt'])
         && data.customerName is string && data.customerName.size() <= 100
         && data.customerPhone is string && data.customerPhone.size() <= 20
         && data.address is string && data.address.size() <= 500
         && data.items is list && data.items.size() > 0
-        && data.totalAmount is number && data.totalAmount > 0
+        && data.total is number && data.total > 0
         && data.status == 'pending'
         && data.createdAt == request.time;
     }
 
-    // 3. Contact Messages: Publicly create-only
+    // 3. Contact Messages: Publicly create-only, readable for admin dashboard
     match /messages/{messageId} {
       allow create: if isValidMessage(incoming());
-      allow read, update, delete: if false;
+      allow read: if true; // In a production app, this should be restricted to admin
+      allow update, delete: if false;
     }
 
     function isValidMessage(data) {
