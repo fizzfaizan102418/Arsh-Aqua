@@ -28,7 +28,11 @@ import {
   ShoppingCart,
   Plus,
   Minus,
-  Trash2
+  Trash2,
+  LayoutDashboard,
+  ClipboardList,
+  Users,
+  LogOut
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from './lib/firebase';
 import { 
@@ -37,7 +41,8 @@ import {
   getDocs, 
   query, 
   orderBy, 
-  serverTimestamp
+  serverTimestamp,
+  Timestamp
 } from 'firebase/firestore';
 
 // --- Types ---
@@ -56,9 +61,34 @@ interface CartItem {
   quantity: number;
 }
 
+interface Order {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  items: CartItem[];
+  total: number;
+  status: 'pending' | 'shipped' | 'delivered';
+  createdAt: Timestamp | null;
+}
+
+interface Message {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  createdAt: Timestamp | null;
+}
+
 // --- Components ---
 
-const Navbar = ({ cartCount, onCartClick }: { cartCount: number, onCartClick: () => void }) => {
+const Navbar = ({ cartCount, onCartClick, isAdminView, onToggleView }: { 
+  cartCount: number, 
+  onCartClick: () => void,
+  isAdminView: boolean,
+  onToggleView: () => void
+}) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -70,7 +100,11 @@ const Navbar = ({ cartCount, onCartClick }: { cartCount: number, onCartClick: ()
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const navLinks = [
+  const navLinks = isAdminView ? [
+    { name: 'Dashboard', href: '#dashboard' },
+    { name: 'Orders', href: '#orders' },
+    { name: 'Messages', href: '#messages' },
+  ] : [
     { name: 'Home', href: '#home' },
     { name: 'About', href: '#about' },
     { name: 'Products', href: '#products' },
@@ -81,16 +115,23 @@ const Navbar = ({ cartCount, onCartClick }: { cartCount: number, onCartClick: ()
   return (
     <nav 
       className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
-        isScrolled ? 'glass py-3' : 'bg-transparent py-6'
+        isScrolled || isAdminView ? 'glass py-3' : 'bg-transparent py-6'
       }`}
     >
       <div className="container mx-auto px-6 flex justify-between items-center">
-        <a href="#home" className="flex items-center gap-2">
-          <Droplets className="w-8 h-8 text-aqua" />
-          <span className="text-2xl font-bold font-serif text-white">
-            Arsh Aqua
-          </span>
-        </a>
+        <div className="flex items-center gap-4">
+          <a href="#" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex items-center gap-2">
+            <Droplets className="w-8 h-8 text-aqua" />
+            <span className="text-2xl font-bold font-serif text-white">
+              Arsh Aqua
+            </span>
+          </a>
+          {isAdminView && (
+            <span className="bg-aqua/20 text-aqua px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-aqua/30">
+              Admin Portal
+            </span>
+          )}
+        </div>
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-8">
@@ -103,30 +144,50 @@ const Navbar = ({ cartCount, onCartClick }: { cartCount: number, onCartClick: ()
               {link.name}
             </a>
           ))}
-          <button 
-            onClick={onCartClick}
-            className="relative p-2 text-white hover:text-aqua transition-colors"
-          >
-            <ShoppingCart className="w-6 h-6" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-aqua text-navy text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                {cartCount}
-              </span>
-            )}
-          </button>
-          <button 
-            onClick={() => {
-              if (cartCount > 0) {
-                onCartClick();
-              } else {
-                const el = document.getElementById('products');
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }
-            }}
-            className="bg-aqua hover:bg-aqua/90 text-navy px-6 py-2.5 rounded-full text-sm font-bold transition-all hover:scale-105 active:scale-95 uppercase"
-          >
-            Order Now
-          </button>
+          
+          {!isAdminView ? (
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={onCartClick}
+                className="relative p-2 text-white hover:text-aqua transition-colors"
+              >
+                <ShoppingCart className="w-6 h-6" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-aqua text-navy text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
+              <button 
+                onClick={onToggleView}
+                className="text-white/20 hover:text-white transition-colors"
+                title="Admin Dashboard"
+              >
+                <LayoutDashboard className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => {
+                  if (cartCount > 0) {
+                    onCartClick();
+                  } else {
+                    const el = document.getElementById('products');
+                    el?.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+                className="bg-aqua hover:bg-aqua/90 text-navy px-6 py-2.5 rounded-full text-sm font-bold transition-all hover:scale-105 active:scale-95 uppercase"
+              >
+                Order Now
+              </button>
+            </div>
+          ) : (
+            <button 
+              onClick={onToggleView}
+              className="flex items-center gap-2 text-white/60 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-xl border border-white/10"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm font-bold uppercase tracking-wider">Exit Admin</span>
+            </button>
+          )}
         </div>
 
         {/* Mobile Menu Toggle */}
@@ -149,31 +210,46 @@ const Navbar = ({ cartCount, onCartClick }: { cartCount: number, onCartClick: ()
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="absolute top-full left-0 w-full bg-white shadow-xl py-6 px-6 md:hidden flex flex-col gap-4"
+            className={`absolute top-full left-0 w-full shadow-xl py-6 px-6 md:hidden flex flex-col gap-4 ${isAdminView ? 'glass' : 'bg-white'}`}
           >
             {navLinks.map((link) => (
               <a 
                 key={link.name} 
                 href={link.href}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="text-lg font-medium text-navy/80 hover:text-aqua py-2 border-b border-gray-100"
+                className={`text-lg font-medium py-2 border-b transition-colors ${
+                  isAdminView ? 'text-white border-white/10 hover:text-aqua' : 'text-navy/80 hover:text-aqua border-gray-100'
+                }`}
               >
                 {link.name}
               </a>
             ))}
-            <button 
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                if (cartCount > 0) {
-                  onCartClick();
-                } else {
-                  document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
-                }
-              }}
-              className="bg-aqua text-white py-4 rounded-xl font-bold mt-2"
-            >
-              Order Now
-            </button>
+            
+            {!isAdminView ? (
+              <button 
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  if (cartCount > 0) {
+                    onCartClick();
+                  } else {
+                    document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+                className="bg-aqua text-white py-4 rounded-xl font-bold mt-2 uppercase"
+              >
+                Order Now
+              </button>
+            ) : (
+              <button 
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  onToggleView();
+                }}
+                className="bg-red-500/20 text-red-500 py-4 rounded-xl font-bold mt-2 uppercase border border-red-500/30"
+              >
+                Exit Admin
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1094,10 +1170,225 @@ const Footer = () => {
   );
 };
 
+const AdminPanel = () => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'orders' | 'messages'>('dashboard');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const ordersSnap = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
+        const messagesSnap = await getDocs(query(collection(db, 'messages'), orderBy('createdAt', 'desc')));
+        
+        setOrders(ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
+        setMessages(messagesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)));
+      } catch (err) {
+        console.error("Fetch error:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+
+  return (
+    <div className="pt-32 pb-20 px-6 min-h-screen bg-navy/50">
+      <div className="container mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2 font-serif tracking-tight">Admin Console</h1>
+            <p className="text-white/50">Real-time business overview and customer management.</p>
+          </div>
+          
+          <div className="flex gap-2 p-1 bg-white/5 rounded-2xl border border-white/10">
+            <button 
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'dashboard' ? 'bg-aqua text-navy' : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </button>
+            <button 
+              onClick={() => setActiveTab('orders')}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'orders' ? 'bg-aqua text-navy' : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4" />
+              Orders
+            </button>
+            <button 
+              onClick={() => setActiveTab('messages')}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'messages' ? 'bg-aqua text-navy' : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <Mail className="w-4 h-4" />
+              Messages
+            </button>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-40">
+            <div className="w-12 h-12 border-4 border-aqua/20 border-t-aqua rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            key={activeTab}
+          >
+            {activeTab === 'dashboard' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                <div className="glass p-8 rounded-3xl border border-white/10">
+                  <div className="w-12 h-12 bg-aqua/20 rounded-2xl flex items-center justify-center text-aqua mb-6">
+                    <DollarSign className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-white/50 text-sm font-bold uppercase tracking-widest mb-1">Total Revenue</h4>
+                  <p className="text-3xl font-bold text-white">Rs. {totalRevenue.toLocaleString()}</p>
+                </div>
+                
+                <div className="glass p-8 rounded-3xl border border-white/10">
+                  <div className="w-12 h-12 bg-pink-500/20 rounded-2xl flex items-center justify-center text-pink-500 mb-6">
+                    <ShoppingCart className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-white/50 text-sm font-bold uppercase tracking-widest mb-1">Total Orders</h4>
+                  <p className="text-3xl font-bold text-white">{orders.length}</p>
+                </div>
+
+                <div className="glass p-8 rounded-3xl border border-white/10">
+                  <div className="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center text-blue-500 mb-6">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-white/50 text-sm font-bold uppercase tracking-widest mb-1">New Messages</h4>
+                  <p className="text-3xl font-bold text-white">{messages.length}</p>
+                </div>
+
+                <div className="glass p-8 rounded-3xl border border-white/10">
+                  <div className="w-12 h-12 bg-green-500/20 rounded-2xl flex items-center justify-center text-green-500 mb-6">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-white/50 text-sm font-bold uppercase tracking-widest mb-1">Conversion Rate</h4>
+                  <p className="text-3xl font-bold text-white">
+                    {orders.length > 0 ? ((orders.length / (orders.length + messages.length + 10)) * 100).toFixed(1) : 0}%
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'orders' && (
+              <div className="glass rounded-[2rem] border border-white/10 overflow-hidden">
+                <div className="p-8 border-b border-white/10 flex justify-between items-center">
+                  <h3 className="text-xl font-bold text-white">Order History</h3>
+                  <button className="text-aqua text-sm font-bold hover:underline">Export CSV</button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-white/5">
+                        <th className="px-8 py-5 text-white/50 font-bold uppercase text-xs tracking-widest">Customer</th>
+                        <th className="px-8 py-5 text-white/50 font-bold uppercase text-xs tracking-widest">Items</th>
+                        <th className="px-8 py-5 text-white/50 font-bold uppercase text-xs tracking-widest">Total</th>
+                        <th className="px-8 py-5 text-white/50 font-bold uppercase text-xs tracking-widest">Date</th>
+                        <th className="px-8 py-5 text-white/50 font-bold uppercase text-xs tracking-widest">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {orders.map(order => (
+                        <tr key={order.id} className="hover:bg-white/5 transition-colors">
+                          <td className="px-8 py-6">
+                            <div className="font-bold text-white">{order.customerName}</div>
+                            <div className="text-white/40 text-xs">{order.customerPhone}</div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="text-white/70 text-sm">
+                              {order.items?.length || 0} Products
+                            </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="font-bold text-aqua">Rs. {order.total}</div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="text-white/50 text-sm">
+                              {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                            </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">
+                              {order.status || 'pending'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {orders.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-8 py-20 text-center text-white/30 italic">No orders found yet.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'messages' && (
+              <div className="grid gap-6">
+                {messages.map(msg => (
+                  <div key={msg.id} className="glass p-8 rounded-3xl border border-white/10">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-aqua/20 rounded-full flex items-center justify-center text-aqua">
+                          <Users className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-white text-lg">{msg.name}</h4>
+                          <p className="text-white/40 text-sm">{msg.phone} • {msg.email}</p>
+                        </div>
+                      </div>
+                      <span className="text-white/20 text-xs uppercase tracking-widest font-bold">
+                        {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleString() : 'Recent'}
+                      </span>
+                    </div>
+                    <div className="bg-white/5 p-6 rounded-2xl border border-white/5 text-white/70 leading-relaxed italic">
+                      "{msg.message}"
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <a 
+                        href={`https://wa.me/${msg.phone.replace(/[^0-9]/g, '')}`} 
+                        target="_blank" 
+                        className="flex items-center gap-2 text-aqua hover:text-white transition-colors text-sm font-bold uppercase tracking-widest"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        Reply via WhatsApp
+                      </a>
+                    </div>
+                  </div>
+                ))}
+                {messages.length === 0 && (
+                  <div className="glass p-20 rounded-3xl text-center text-white/30 italic">No messages received yet.</div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [isAdminView, setIsAdminView] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -1243,20 +1534,47 @@ export default function App() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
+  const toggleAdminView = () => {
+    if (!isAdminView) {
+      const password = prompt("Enter Admin Password:");
+      if (password === "admin123") { // Simple protection
+        setIsAdminView(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        alert("Access Denied");
+      }
+    } else {
+      setIsAdminView(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="min-h-screen selection:bg-aqua selection:text-white">
-      <Navbar cartCount={cartCount} onCartClick={() => setIsCartOpen(true)} />
-      <Hero />
-      <TrustBar />
-      <About />
-      <Products products={products} onAddToCart={addToCart} />
-      <WhyUs />
-      <HowItWorks />
-      <Testimonials />
-      <Stats />
-      <CTABanner />
-      <Contact onSendMessage={handleSendMessage} />
-      <Footer />
+      <Navbar 
+        cartCount={cartCount} 
+        onCartClick={() => setIsCartOpen(true)} 
+        isAdminView={isAdminView}
+        onToggleView={toggleAdminView}
+      />
+      
+      {!isAdminView ? (
+        <>
+          <Hero />
+          <TrustBar />
+          <About />
+          <Products products={products} onAddToCart={addToCart} />
+          <WhyUs />
+          <HowItWorks />
+          <Testimonials />
+          <Stats />
+          <CTABanner />
+          <Contact onSendMessage={handleSendMessage} />
+          <Footer />
+        </>
+      ) : (
+        <AdminPanel />
+      )}
       
       <CartDrawer 
         isOpen={isCartOpen} 
