@@ -836,13 +836,13 @@ const CheckoutModal = ({
           <input name="name" type="text" placeholder="Full Name" required className="w-full px-6 py-4 rounded-xl bg-white/5 border border-white/10 text-white outline-none focus:border-aqua transition-all" />
           <input name="phone" type="tel" placeholder="Phone Number" required className="w-full px-6 py-4 rounded-xl bg-white/5 border border-white/10 text-white outline-none focus:border-aqua transition-all" />
           <textarea name="address" placeholder="Delivery Address" required className="w-full px-6 py-4 rounded-xl bg-white/5 border border-white/10 text-white outline-none focus:border-aqua transition-all h-24 resize-none" />
-          <p className="text-xs text-white/40 italic">* We currently offer Cash on Delivery only.</p>
+          <p className="text-xs text-white/40 italic">* You will be redirected to WhatsApp to confirm your order details.</p>
           <button 
             type="submit" 
             disabled={isSubmitting}
             className="w-full bg-aqua text-navy py-5 rounded-2xl font-bold text-lg transition-all hover:bg-white active:scale-95 disabled:opacity-50"
           >
-            {isSubmitting ? 'Processing...' : 'Confirm Order'}
+            {isSubmitting ? 'Processing...' : 'Confirm Order via WhatsApp'}
           </button>
         </form>
       </motion.div>
@@ -1167,6 +1167,21 @@ export default function App() {
     setIsSubmittingOrder(true);
     try {
       const orderTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+      
+      // Construct WhatsApp message
+      const itemsList = cart.map(item => `- ${item.product.name} x${item.quantity} (Rs. ${item.product.price * item.quantity})`).join('%0A');
+      const message = `*New Order from Arsh Aqua*%0A%0A` +
+        `*Customer Details:*%0A` +
+        `Name: ${formData.name}%0A` +
+        `Phone: ${formData.phone}%0A` +
+        `Address: ${formData.address}%0A%0A` +
+        `*Order Items:*%0A${itemsList}%0A%0A` +
+        `*Total Amount: Rs. ${orderTotal}*%0A%0A` +
+        `Please confirm my order. Thank you!`;
+      
+      const whatsappUrl = `https://wa.me/923219084365?text=${message}`;
+
+      // Save to Firebase (Record for owner)
       await addDoc(collection(db, 'orders'), {
         customerName: formData.name,
         customerPhone: formData.phone,
@@ -1181,10 +1196,16 @@ export default function App() {
         status: 'pending',
         createdAt: serverTimestamp()
       });
+
+      // Clear cart and close modals
       setCart([]);
       setIsCheckoutOpen(false);
       setIsCartOpen(false);
-      alert('Thank you! Your order has been placed. We will contact you soon for delivery.');
+      
+      // Redirect to WhatsApp
+      window.open(whatsappUrl, '_blank');
+      
+      alert('Thank you! Your order has been placed. Redirecting to WhatsApp for confirmation...');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'orders');
     } finally {
