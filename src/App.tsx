@@ -1006,12 +1006,13 @@ const Contact = ({ onSendMessage }: { onSendMessage: (data: ContactData) => Prom
                   className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-aqua outline-none transition-all text-white placeholder:text-white/20 resize-none"
                 />
               </div>
+              <p className="text-xs text-white/40 italic">* We'll redirect you to WhatsApp for a faster response.</p>
               <button 
                 type="submit"
                 disabled={isSubmitting}
                 className="w-full bg-aqua hover:bg-white text-navy py-5 rounded-2xl font-bold text-lg transition-all shadow-lg hover:shadow-aqua/20 active:scale-[0.98] uppercase tracking-widest disabled:opacity-50"
               >
-                {isSubmitting ? 'Sending...' : isSent ? 'Message Sent!' : 'Send Message'}
+                {isSubmitting ? 'Sending...' : isSent ? 'Message Sent!' : 'Send Message via WhatsApp'}
               </button>
             </form>
           </motion.div>
@@ -1215,10 +1216,25 @@ export default function App() {
 
   const handleSendMessage = async (data: ContactData) => {
     try {
+      // Construct WhatsApp message
+      const message = `*New Inquiry from Arsh Aqua*%0A%0A` +
+        `*Customer Details:*%0A` +
+        `Name: ${data.name}%0A` +
+        `Phone: ${data.phone}%0A` +
+        `Email: ${data.email || 'N/A'}%0A%0A` +
+        `*Message:*%0A${data.message}`;
+      
+      const whatsappUrl = `https://wa.me/923219084365?text=${message}`;
+
+      // Save to Firebase for records
       await addDoc(collection(db, 'messages'), {
         ...data,
         createdAt: serverTimestamp()
       });
+
+      // Redirect to WhatsApp
+      window.open(whatsappUrl, '_blank');
+      
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'messages');
     }
