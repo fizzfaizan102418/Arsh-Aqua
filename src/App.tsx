@@ -116,8 +116,12 @@ const Navbar = ({ cartCount, onCartClick }: { cartCount: number, onCartClick: ()
           </button>
           <button 
             onClick={() => {
-              const el = document.getElementById('products');
-              el?.scrollIntoView({ behavior: 'smooth' });
+              if (cartCount > 0) {
+                onCartClick();
+              } else {
+                const el = document.getElementById('products');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }
             }}
             className="bg-aqua hover:bg-aqua/90 text-navy px-6 py-2.5 rounded-full text-sm font-bold transition-all hover:scale-105 active:scale-95 uppercase"
           >
@@ -157,7 +161,17 @@ const Navbar = ({ cartCount, onCartClick }: { cartCount: number, onCartClick: ()
                 {link.name}
               </a>
             ))}
-            <button className="bg-aqua text-white py-4 rounded-xl font-bold mt-2">
+            <button 
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                if (cartCount > 0) {
+                  onCartClick();
+                } else {
+                  document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+              className="bg-aqua text-white py-4 rounded-xl font-bold mt-2"
+            >
               Order Now
             </button>
           </motion.div>
@@ -196,10 +210,16 @@ const Hero = () => {
             Arsh Aqua delivers nature's finest mineral water — untouched, uncompromised, unforgettable. Experience the essence of purity in every drop.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <button className="bg-aqua hover:bg-aqua/90 text-navy px-10 py-4 rounded-full text-lg font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-aqua/20">
+            <button 
+              onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-aqua hover:bg-aqua/90 text-navy px-10 py-4 rounded-full text-lg font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-aqua/20"
+            >
               Shop Now
             </button>
-            <button className="border-2 border-aqua hover:bg-aqua/10 text-aqua px-10 py-4 rounded-full text-lg font-bold transition-all">
+            <button 
+              onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })}
+              className="border-2 border-aqua hover:bg-aqua/10 text-aqua px-10 py-4 rounded-full text-lg font-bold transition-all"
+            >
               Learn More
             </button>
           </div>
@@ -913,7 +933,7 @@ const Contact = ({ onSendMessage }: { onSendMessage: (data: ContactData) => Prom
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-lg">Call Us</h4>
-                  <p className="text-white/50">+92 (300) 123-4567</p>
+                  <p className="text-white/50">+92 (321)-9084365</p>
                 </div>
               </div>
               <div className="flex items-start gap-6">
@@ -922,7 +942,7 @@ const Contact = ({ onSendMessage }: { onSendMessage: (data: ContactData) => Prom
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-lg">Email Us</h4>
-                  <p className="text-white/50">contact@arshaqua.com.pk</p>
+                  <p className="text-white/50">irfankhan2026@gmail.com</p>
                 </div>
               </div>
               <div className="flex items-start gap-6">
@@ -931,7 +951,7 @@ const Contact = ({ onSendMessage }: { onSendMessage: (data: ContactData) => Prom
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-lg">Visit Us</h4>
-                  <p className="text-white/50">Industrial Estate, Islamabad, Pakistan</p>
+                  <p className="text-white/50">Arsh Aqua Water Plant, Faqir Kaly, Peshawar.</p>
                 </div>
               </div>
             </div>
@@ -972,7 +992,7 @@ const Contact = ({ onSendMessage }: { onSendMessage: (data: ContactData) => Prom
                   name="phone"
                   type="tel" 
                   required
-                  placeholder="+92 (300) 000-0000" 
+                  placeholder="+92 (321)-9084365" 
                   className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-aqua outline-none transition-all text-white placeholder:text-white/20"
                 />
               </div>
@@ -1065,7 +1085,8 @@ const Footer = () => {
         </div>
 
         <div className="border-t border-white/10 pt-12 text-center text-white/30 text-sm">
-          <p>© {new Date().getFullYear()} Arsh Aqua. All rights reserved. Designed for Purity.</p>
+          <p>© {new Date().getFullYear()} Arsh Aqua. | +92 (321)-9084365 | irfankhan2026@gmail.com</p>
+          <p className="mt-2">Arsh Aqua Water Plant, Faqir Kaly, Peshawar.</p>
         </div>
       </div>
     </footer>
