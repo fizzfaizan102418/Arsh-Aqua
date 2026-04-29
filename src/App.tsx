@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, useScroll, useTransform, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Droplets, 
   CheckCircle2, 
@@ -24,12 +24,41 @@ import {
   Menu,
   X,
   ChevronRight,
-  Quote
+  Quote,
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2
 } from 'lucide-react';
+import { db, handleFirestoreError, OperationType } from './lib/firebase';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  query, 
+  orderBy, 
+  serverTimestamp
+} from 'firebase/firestore';
+
+// --- Types ---
+
+interface Product {
+  id: string;
+  name: string;
+  desc: string;
+  price: number;
+  img: string;
+  size: string;
+}
+
+interface CartItem {
+  product: Product;
+  quantity: number;
+}
 
 // --- Components ---
 
-const Navbar = () => {
+const Navbar = ({ cartCount, onCartClick }: { cartCount: number, onCartClick: () => void }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -74,7 +103,24 @@ const Navbar = () => {
               {link.name}
             </a>
           ))}
-          <button className="bg-aqua hover:bg-aqua/90 text-navy px-6 py-2.5 rounded-full text-sm font-bold transition-all hover:scale-105 active:scale-95 uppercase">
+          <button 
+            onClick={onCartClick}
+            className="relative p-2 text-white hover:text-aqua transition-colors"
+          >
+            <ShoppingCart className="w-6 h-6" />
+            {cartCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-aqua text-navy text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                {cartCount}
+              </span>
+            )}
+          </button>
+          <button 
+            onClick={() => {
+              const el = document.getElementById('products');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className="bg-aqua hover:bg-aqua/90 text-navy px-6 py-2.5 rounded-full text-sm font-bold transition-all hover:scale-105 active:scale-95 uppercase"
+          >
             Order Now
           </button>
         </div>
@@ -289,38 +335,7 @@ const About = () => {
   );
 };
 
-const Products = () => {
-  const products = [
-    {
-      id: 1,
-      name: "Arsh Aqua 500ml",
-      desc: "Perfect for on-the-go hydration. Compact and refreshing.",
-      price: "$0.99",
-      img: "https://placehold.co/400x600/00B4D8/FFFFFF?text=500ml+Bottle"
-    },
-    {
-      id: 2,
-      name: "Arsh Aqua 1.5L",
-      desc: "Ideal for your daily hydration needs at home or office.",
-      price: "$1.99",
-      img: "https://placehold.co/400x600/00B4D8/FFFFFF?text=1.5L+Bottle"
-    },
-    {
-      id: 3,
-      name: "5-Gallon Dispenser",
-      desc: "Premium mineral water for families and large offices.",
-      price: "$12.99",
-      img: "https://placehold.co/400x600/00B4D8/FFFFFF?text=5-Gallon+Jug"
-    },
-    {
-      id: 4,
-      name: "Premium Glass Edition",
-      desc: "Elegant 750ml glass bottle for fine dining experiences.",
-      price: "$4.99",
-      img: "https://placehold.co/400x600/00B4D8/FFFFFF?text=Glass+Edition"
-    }
-  ];
-
+const Products = ({ products, onAddToCart }: { products: Product[], onAddToCart: (product: Product) => void }) => {
   return (
     <section id="products" className="py-24 bg-navy/30">
       <div className="container mx-auto px-6">
@@ -349,15 +364,23 @@ const Products = () => {
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-navy/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <button className="bg-aqua text-navy px-6 py-2 rounded-full font-bold text-sm shadow-lg uppercase">Quick View</button>
+                  <button 
+                    onClick={() => onAddToCart(product)}
+                    className="bg-aqua text-navy px-6 py-2 rounded-full font-bold text-sm shadow-lg uppercase"
+                  >
+                    Add to Cart
+                  </button>
                 </div>
               </div>
               <h3 className="text-xl font-bold mb-2 text-white">{product.name}</h3>
               <p className="text-white/60 text-sm mb-4 line-clamp-2">{product.desc}</p>
               <div className="flex items-center justify-between mt-auto">
-                <span className="text-2xl font-bold text-aqua">{product.price}</span>
-                <button className="bg-white text-navy hover:bg-aqua hover:text-white p-3 rounded-xl transition-all">
-                  <Droplets className="w-5 h-5" />
+                <span className="text-2xl font-bold text-aqua">Rs. {product.price}</span>
+                <button 
+                  onClick={() => onAddToCart(product)}
+                  className="bg-white text-navy hover:bg-aqua hover:text-white p-3 rounded-xl transition-all"
+                >
+                  <ShoppingCart className="w-5 h-5" />
                 </button>
               </div>
             </motion.div>
@@ -593,7 +616,124 @@ const Stats = () => {
   );
 };
 
-const Counter = ({ value }: { value: number }) => {
+const CartDrawer = ({ 
+  isOpen, 
+  onClose, 
+  items, 
+  onUpdateQuantity, 
+  onRemove, 
+  onCheckout 
+}: { 
+  isOpen: boolean;
+  onClose: () => void;
+  items: CartItem[];
+  onUpdateQuantity: (productId: string, delta: number) => void;
+  onRemove: (productId: string) => void;
+  onCheckout: () => void;
+}) => {
+  const total = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-navy/60 backdrop-blur-sm z-[60]"
+          />
+          <motion.div 
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed top-0 right-0 h-full w-full max-w-md bg-navy border-l border-white/10 z-[70] shadow-2xl flex flex-col"
+          >
+            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+              <h3 className="text-2xl font-bold font-serif text-white">Your Basket</h3>
+              <button 
+                onClick={onClose}
+                className="p-2 hover:bg-white/5 rounded-full text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {items.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center">
+                  <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6">
+                    <ShoppingCart className="w-10 h-10 text-white/20" />
+                  </div>
+                  <h4 className="text-xl font-bold text-white mb-2">Basket is empty</h4>
+                  <p className="text-white/40 mb-8">Start adding some pure hydration to your basket.</p>
+                  <button 
+                    onClick={onClose}
+                    className="bg-aqua text-navy px-8 py-3 rounded-full font-bold uppercase transition-transform hover:scale-105"
+                  >
+                    Start Shopping
+                  </button>
+                </div>
+              ) : (
+                items.map((item) => (
+                  <div key={item.product.id} className="flex gap-4 p-4 glass rounded-2xl relative group">
+                    <div className="w-20 h-20 bg-white/5 rounded-xl overflow-hidden shrink-0">
+                      <img src={item.product.img} alt={item.product.name} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-bold text-white mb-1">{item.product.name}</h4>
+                      <p className="text-aqua font-bold text-sm mb-3">Rs. {item.product.price}</p>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3 bg-white/5 rounded-lg px-2 py-1">
+                          <button 
+                            onClick={() => onUpdateQuantity(item.product.id, -1)}
+                            className="p-1 hover:text-aqua transition-colors text-white"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="text-white font-bold min-w-[20px] text-center">{item.quantity}</span>
+                          <button 
+                            onClick={() => onUpdateQuantity(item.product.id, 1)}
+                            className="p-1 hover:text-aqua transition-colors text-white"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => onRemove(item.product.id)}
+                      className="absolute top-4 right-4 text-white/20 hover:text-red-400 transition-colors p-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {items.length > 0 && (
+              <div className="p-6 border-t border-white/10 bg-white/[0.02]">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-white/60 font-medium">Subtotal</span>
+                  <span className="text-3xl font-bold text-white">Rs. {total}</span>
+                </div>
+                <button 
+                  onClick={onCheckout}
+                  className="w-full bg-aqua hover:bg-white text-navy py-5 rounded-2xl font-bold text-lg transition-all shadow-lg hover:shadow-aqua/20 active:scale-[0.98] uppercase tracking-widest"
+                >
+                  Checkout Now
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};const Counter = ({ value }: { value: number }) => {
   const [count, setCount] = useState(0);
   const ref = useRef(null);
   const [hasAnimated, setHasAnimated] = useState(false);
@@ -630,6 +770,66 @@ const Counter = ({ value }: { value: number }) => {
   return <span ref={ref}>{count}</span>;
 };
 
+interface CheckoutData {
+  name: string;
+  phone: string;
+  address: string;
+}
+
+const CheckoutModal = ({ 
+  isOpen, 
+  onClose, 
+  total, 
+  onSubmit, 
+  isSubmitting 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  total: number;
+  onSubmit: (data: CheckoutData) => void;
+  isSubmitting: boolean;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-navy/80 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-navy border border-white/10 p-8 rounded-[2.5rem] max-w-lg w-full shadow-2xl"
+      >
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-3xl font-bold font-serif text-white">Checkout</h2>
+          <button onClick={onClose} className="p-2 text-white/50 hover:text-white"><X className="w-6 h-6" /></button>
+        </div>
+        
+        <div className="mb-6 p-4 bg-white/5 rounded-2xl flex justify-between items-center">
+          <span className="text-white/60">Order Total:</span>
+          <span className="text-2xl font-bold text-aqua">Rs. {total}</span>
+        </div>
+
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          const formData = new FormData(e.currentTarget);
+          onSubmit(Object.fromEntries(formData) as unknown as CheckoutData);
+        }} className="space-y-4">
+          <input name="name" type="text" placeholder="Full Name" required className="w-full px-6 py-4 rounded-xl bg-white/5 border border-white/10 text-white outline-none focus:border-aqua transition-all" />
+          <input name="phone" type="tel" placeholder="Phone Number" required className="w-full px-6 py-4 rounded-xl bg-white/5 border border-white/10 text-white outline-none focus:border-aqua transition-all" />
+          <textarea name="address" placeholder="Delivery Address" required className="w-full px-6 py-4 rounded-xl bg-white/5 border border-white/10 text-white outline-none focus:border-aqua transition-all h-24 resize-none" />
+          <p className="text-xs text-white/40 italic">* We currently offer Cash on Delivery only.</p>
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full bg-aqua text-navy py-5 rounded-2xl font-bold text-lg transition-all hover:bg-white active:scale-95 disabled:opacity-50"
+          >
+            {isSubmitting ? 'Processing...' : 'Confirm Order'}
+          </button>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
 const CTABanner = () => {
   return (
     <section className="py-24">
@@ -648,7 +848,13 @@ const CTABanner = () => {
           <div className="relative z-10 max-w-3xl mx-auto">
             <h2 className="text-4xl md:text-6xl font-bold mb-8">Ready to Make the Switch to Pure?</h2>
             <p className="text-xl text-white/70 mb-10">Free delivery on your first order. Join thousands of health-conscious families today.</p>
-            <button className="bg-aqua text-navy hover:bg-white px-12 py-5 rounded-full text-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-xl uppercase">
+            <button 
+              onClick={() => {
+                const el = document.getElementById('products');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-aqua text-navy hover:bg-white px-12 py-5 rounded-full text-xl font-bold transition-all hover:scale-105 active:scale-95 shadow-xl uppercase"
+            >
               Order Now
             </button>
           </div>
@@ -656,7 +862,36 @@ const CTABanner = () => {
       </div>
     </section>
   );
-};const Contact = () => {
+};
+
+interface ContactData {
+  name: string;
+  email?: string;
+  phone: string;
+  message: string;
+}
+
+const Contact = ({ onSendMessage }: { onSendMessage: (data: ContactData) => Promise<void> }) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSent, setIsSent] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    const data = Object.fromEntries(formData) as unknown as ContactData;
+    try {
+      await onSendMessage(data);
+      setIsSent(true);
+      (e.target as HTMLFormElement).reset();
+      setTimeout(() => setIsSent(false), 5000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <section id="contact" className="py-24 bg-transparent">
       <div className="container mx-auto px-6">
@@ -678,7 +913,7 @@ const CTABanner = () => {
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-lg">Call Us</h4>
-                  <p className="text-white/50">+1 (555) 123-4567</p>
+                  <p className="text-white/50">+92 (300) 123-4567</p>
                 </div>
               </div>
               <div className="flex items-start gap-6">
@@ -687,7 +922,7 @@ const CTABanner = () => {
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-lg">Email Us</h4>
-                  <p className="text-white/50">hello@arshaqua.com</p>
+                  <p className="text-white/50">contact@arshaqua.com.pk</p>
                 </div>
               </div>
               <div className="flex items-start gap-6">
@@ -696,7 +931,7 @@ const CTABanner = () => {
                 </div>
                 <div>
                   <h4 className="font-bold text-white text-lg">Visit Us</h4>
-                  <p className="text-white/50">123 Purity Lane, Spring Valley, CA 90210</p>
+                  <p className="text-white/50">Industrial Estate, Islamabad, Pakistan</p>
                 </div>
               </div>
             </div>
@@ -709,12 +944,14 @@ const CTABanner = () => {
             viewport={{ once: true }}
             className="glass p-10 md:p-12 rounded-[2.5rem] shadow-2xl"
           >
-            <form className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-white/70 ml-1 uppercase tracking-wider">Full Name</label>
                   <input 
+                    name="name"
                     type="text" 
+                    required
                     placeholder="John Doe" 
                     className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-aqua outline-none transition-all text-white placeholder:text-white/20"
                   />
@@ -722,6 +959,7 @@ const CTABanner = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-white/70 ml-1 uppercase tracking-wider">Email Address</label>
                   <input 
+                    name="email"
                     type="email" 
                     placeholder="john@example.com" 
                     className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-aqua outline-none transition-all text-white placeholder:text-white/20"
@@ -731,21 +969,29 @@ const CTABanner = () => {
               <div className="space-y-2">
                 <label className="text-sm font-bold text-white/70 ml-1 uppercase tracking-wider">Phone Number</label>
                 <input 
+                  name="phone"
                   type="tel" 
-                  placeholder="+1 (555) 000-0000" 
+                  required
+                  placeholder="+92 (300) 000-0000" 
                   className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-aqua outline-none transition-all text-white placeholder:text-white/20"
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold text-white/70 ml-1 uppercase tracking-wider">Your Message</label>
                 <textarea 
+                  name="message"
                   rows={4} 
+                  required
                   placeholder="How can we help you?" 
                   className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-aqua outline-none transition-all text-white placeholder:text-white/20 resize-none"
                 />
               </div>
-              <button className="w-full bg-aqua hover:bg-white text-navy py-5 rounded-2xl font-bold text-lg transition-all shadow-lg hover:shadow-aqua/20 active:scale-[0.98] uppercase tracking-widest">
-                Send Message
+              <button 
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-aqua hover:bg-white text-navy py-5 rounded-2xl font-bold text-lg transition-all shadow-lg hover:shadow-aqua/20 active:scale-[0.98] uppercase tracking-widest disabled:opacity-50"
+              >
+                {isSubmitting ? 'Sending...' : isSent ? 'Message Sent!' : 'Send Message'}
               </button>
             </form>
           </motion.div>
@@ -829,20 +1075,140 @@ const Footer = () => {
 // --- Main App ---
 
 export default function App() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const q = query(collection(db, 'products'), orderBy('price', 'asc'));
+        const querySnapshot = await getDocs(q);
+        const productsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+        
+        if (productsData.length === 0) {
+          // Seed initial data if empty
+          const initialProducts = [
+            { name: "Arsh Aqua 500ml", desc: "Perfect for on-the-go hydration. Compact and refreshing.", price: 50, img: "https://images.unsplash.com/photo-1551613204-206e84d43636?q=80&w=600", size: "500ml" },
+            { name: "Arsh Aqua 1.5L", desc: "Ideal for your daily hydration needs at home or office.", price: 100, img: "https://images.unsplash.com/photo-1616118132283-360706790513?q=80&w=600", size: "1.5L" },
+            { name: "5-Gallon Dispenser", desc: "Premium mineral water for families and large offices.", price: 400, img: "https://images.unsplash.com/photo-1559839914-17aae19cea9e?q=80&w=600", size: "19L" },
+            { name: "Premium Glass Edition", desc: "Elegant 750ml glass bottle for fine dining experiences.", price: 350, img: "https://images.unsplash.com/photo-1548919973-5da5ad0dc946?q=80&w=600", size: "750ml" }
+          ];
+          
+          for (const prod of initialProducts) {
+            await addDoc(collection(db, 'products'), prod);
+          }
+          fetchProducts(); // Re-fetch after seeding
+        } else {
+          setProducts(productsData);
+        }
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, 'products');
+      }
+    };
+
+    fetchProducts();
+  }, []);
+
+  const addToCart = (product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.product.id === product.id);
+      if (existing) {
+        return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      }
+      return [...prev, { product, quantity: 1 }];
+    });
+    setIsCartOpen(true);
+  };
+
+  const updateQuantity = (productId: string, delta: number) => {
+    setCart(prev => prev.map(item => 
+      item.product.id === productId 
+        ? { ...item, quantity: Math.max(1, item.quantity + delta) } 
+        : item
+    ));
+  };
+
+  const removeFromCart = (productId: string) => {
+    setCart(prev => prev.filter(item => item.product.id !== productId));
+  };
+
+  const handleCheckout = async (formData: CheckoutData) => {
+    setIsSubmittingOrder(true);
+    try {
+      const orderTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+      await addDoc(collection(db, 'orders'), {
+        customerName: formData.name,
+        customerPhone: formData.phone,
+        address: formData.address,
+        items: cart.map(item => ({
+          productId: item.product.id,
+          productName: item.product.name,
+          quantity: item.quantity,
+          price: item.product.price
+        })),
+        totalAmount: orderTotal,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+      setCart([]);
+      setIsCheckoutOpen(false);
+      setIsCartOpen(false);
+      alert('Thank you! Your order has been placed. We will contact you soon for delivery.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'orders');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+  const handleSendMessage = async (data: ContactData) => {
+    try {
+      await addDoc(collection(db, 'messages'), {
+        ...data,
+        createdAt: serverTimestamp()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'messages');
+    }
+  };
+
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+
   return (
     <div className="min-h-screen selection:bg-aqua selection:text-white">
-      <Navbar />
+      <Navbar cartCount={cartCount} onCartClick={() => setIsCartOpen(true)} />
       <Hero />
       <TrustBar />
       <About />
-      <Products />
+      <Products products={products} onAddToCart={addToCart} />
       <WhyUs />
       <HowItWorks />
       <Testimonials />
       <Stats />
       <CTABanner />
-      <Contact />
+      <Contact onSendMessage={handleSendMessage} />
       <Footer />
+      
+      <CartDrawer 
+        isOpen={isCartOpen} 
+        onClose={() => setIsCartOpen(false)} 
+        items={cart}
+        onUpdateQuantity={updateQuantity}
+        onRemove={removeFromCart}
+        onCheckout={() => setIsCheckoutOpen(true)}
+      />
+
+      <CheckoutModal 
+        isOpen={isCheckoutOpen} 
+        onClose={() => setIsCheckoutOpen(false)} 
+        total={cartTotal}
+        isSubmitting={isSubmittingOrder}
+        onSubmit={handleCheckout}
+      />
     </div>
   );
 }
