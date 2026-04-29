@@ -1547,7 +1547,7 @@ export default function App() {
   const toggleAdminView = () => {
     if (!isAdminView) {
       const password = prompt("Enter Admin Password:");
-      if (password === "admin123") { // Simple protection
+      if (password === "fizzfaizan") { // Simple protection
         setIsAdminView(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
