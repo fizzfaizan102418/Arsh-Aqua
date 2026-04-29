@@ -1097,10 +1097,17 @@ export default function App() {
             { name: "Premium Glass Edition", desc: "Elegant 750ml glass bottle for fine dining experiences.", price: 350, img: "https://images.unsplash.com/photo-1548919973-5da5ad0dc946?q=80&w=600", size: "750ml" }
           ];
           
-          for (const prod of initialProducts) {
-            await addDoc(collection(db, 'products'), prod);
+          try {
+            for (const prod of initialProducts) {
+              await addDoc(collection(db, 'products'), prod);
+            }
+            // After seeding, fetch again
+            const qAfter = query(collection(db, 'products'), orderBy('price', 'asc'));
+            const snapAfter = await getDocs(qAfter);
+            setProducts(snapAfter.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+          } catch (seedErr) {
+            handleFirestoreError(seedErr, OperationType.WRITE, 'products');
           }
-          fetchProducts(); // Re-fetch after seeding
         } else {
           setProducts(productsData);
         }
