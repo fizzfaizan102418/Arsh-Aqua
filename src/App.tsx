@@ -42,7 +42,8 @@ import {
   query, 
   orderBy, 
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  onSnapshot
 } from 'firebase/firestore';
 
 // --- Types ---
@@ -1177,21 +1178,30 @@ const AdminPanel = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        const ordersSnap = await getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc')));
-        const messagesSnap = await getDocs(query(collection(db, 'messages'), orderBy('createdAt', 'desc')));
-        
-        setOrders(ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
-        setMessages(messagesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)));
-      } catch (err) {
-        console.error("Fetch error:", err);
-      } finally {
-        setIsLoading(false);
-      }
+    setIsLoading(true);
+    
+    // Real-time Orders Listener
+    const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+    const unsubscribeOrders = onSnapshot(ordersQuery, (snapshot) => {
+      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
+      setIsLoading(false);
+    }, (err) => {
+      console.error("Orders listener error:", err);
+      setIsLoading(false);
+    });
+
+    // Real-time Messages Listener
+    const messagesQuery = query(collection(db, 'messages'), orderBy('createdAt', 'desc'));
+    const unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
+      setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)));
+    }, (err) => {
+      console.error("Messages listener error:", err);
+    });
+
+    return () => {
+      unsubscribeOrders();
+      unsubscribeMessages();
     };
-    fetchData();
   }, []);
 
   const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
